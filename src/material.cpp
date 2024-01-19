@@ -225,11 +225,20 @@ Material::Material(pugi::xml_node node)
     // Check that this nuclide is listed in the nuclear data library
     // (cross_sections.xml for CE and the MGXS HDF5 for MG)
     if (settings::run_mode != RunMode::PLOTTING) {
-      LibraryKey key {Library::Type::neutron, name};
-      if (data::library_map.find(key) == data::library_map.end()) {
-        fatal_error("Could not find nuclide " + name +
-                    " in the "
-                    "nuclear data library.");
+      if (settings::atomic_transport) {
+        LibraryKey key {Library::Type::atomic, name};
+        if (data::library_map.find(key) == data::library_map.end()) {
+          fatal_error("Could not find target " + name +
+                      " in the "
+                      "atomic data library.");
+        }
+      } else {
+        LibraryKey key {Library::Type::neutron, name};
+        if (data::library_map.find(key) == data::library_map.end()) {
+          fatal_error("Could not find nuclide " + name +
+                      " in the "
+                      "nuclear data library.");
+        }
       }
     }
 

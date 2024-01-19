@@ -54,6 +54,8 @@ Library::Library(pugi::xml_node node, const std::string& directory)
       type_ = Type::photon;
     } else if (type == "wmp") {
       type_ = Type::wmp;
+    } else if (type == "atomic") {
+      type_ = Type::atomic;
     } else {
       fatal_error("Unrecognized library type: " + type);
     }
@@ -177,6 +179,7 @@ void read_cross_sections_xml(pugi::xml_node root)
                   " in cross_sections.xml file!");
     }
   }
+
 }
 
 void read_ce_cross_sections(const vector<vector<double>>& nuc_temps,

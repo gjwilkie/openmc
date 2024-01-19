@@ -41,6 +41,7 @@ extern "C" bool output_summary;    //!< write summary.h5?
 extern bool output_tallies;        //!< write tallies.out?
 extern bool particle_restart_run;  //!< particle restart run?
 extern "C" bool photon_transport;  //!< photon transport turned on?
+extern "C" bool atomic_transport;  //!< using OpenMC for atoms/molecules?
 extern "C" bool reduce_tallies;    //!< reduce tallies at end of batch?
 extern bool res_scat_on;           //!< use resonance upscattering method?
 extern "C" bool restart_run;       //!< restart run?

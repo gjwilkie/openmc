@@ -56,6 +56,7 @@ bool output_summary {true};
 bool output_tallies {true};
 bool particle_restart_run {false};
 bool photon_transport {false};
+bool atomic_transport {false};
 bool reduce_tallies {true};
 bool res_scat_on {false};
 bool restart_run {false};
@@ -424,7 +425,7 @@ void read_settings_xml(pugi::xml_node root)
       fatal_error("Unrecognized electron treatment: " + temp_str + ".");
     }
   }
-
+  
   // Check for photon transport
   if (check_for_node(root, "photon_transport")) {
     photon_transport = get_node_value_bool(root, "photon_transport");
@@ -433,6 +434,12 @@ void read_settings_xml(pugi::xml_node root)
       fatal_error("Photon transport is not currently supported in "
                   "multigroup mode");
     }
+  }
+ 
+  // Check for atomic transport
+  if (check_for_node(root, "atomic_transport")) {
+    atomic_transport = get_node_value_bool(root, "atomic_transport");
+
   }
 
   // Number of bins for logarithmic grid

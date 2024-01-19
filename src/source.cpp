@@ -99,6 +99,9 @@ IndependentSource::IndependentSource(pugi::xml_node node)
     } else if (temp_str == "photon") {
       particle_ = ParticleType::photon;
       settings::photon_transport = true;
+    } else if (temp_str == "atomic") {
+      particle_ = ParticleType::neutron;
+      settings::atomic_transport = true;
     } else {
       fatal_error(std::string("Unknown source particle type: ") + temp_str);
     }

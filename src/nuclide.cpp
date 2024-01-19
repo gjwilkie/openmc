@@ -1090,7 +1090,13 @@ extern "C" int openmc_load_nuclide(const char* name, const double* temps, int n)
 {
   if (data::nuclide_map.find(name) == data::nuclide_map.end() ||
       data::nuclide_map.at(name) >= data::elements.size()) {
-    LibraryKey key {Library::Type::neutron, name};
+    LibraryKey key; 
+    if (settings::atomic_transport) {
+      key = {Library::Type::atomic, name};
+    } else {
+      key = {Library::Type::neutron, name};
+    }
+
     const auto& it = data::library_map.find(key);
     if (it == data::library_map.end()) {
       set_errmsg(

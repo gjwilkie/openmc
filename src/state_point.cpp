@@ -104,6 +104,7 @@ extern "C" int openmc_statepoint_write(const char* filename, bool* write_source)
       break;
     }
     write_attribute(file_id, "photon_transport", settings::photon_transport);
+    write_attribute(file_id, "atomic_transport", settings::atomic_transport);
     write_dataset(file_id, "n_particles", settings::n_particles);
     write_dataset(file_id, "n_batches", settings::n_batches);
 
