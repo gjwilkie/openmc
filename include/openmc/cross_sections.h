@@ -22,7 +22,7 @@ public:
     photon = 3,
     thermal = 2,
     multigroup = 4,
-    wmp = 5, 
+    wmp = 5,
     atomic = 6
   };
 

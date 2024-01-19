@@ -179,7 +179,6 @@ void read_cross_sections_xml(pugi::xml_node root)
                   " in cross_sections.xml file!");
     }
   }
-
 }
 
 void read_ce_cross_sections(const vector<vector<double>>& nuc_temps,

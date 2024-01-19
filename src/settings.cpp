@@ -425,7 +425,7 @@ void read_settings_xml(pugi::xml_node root)
       fatal_error("Unrecognized electron treatment: " + temp_str + ".");
     }
   }
-  
+
   // Check for photon transport
   if (check_for_node(root, "photon_transport")) {
     photon_transport = get_node_value_bool(root, "photon_transport");
@@ -435,11 +435,10 @@ void read_settings_xml(pugi::xml_node root)
                   "multigroup mode");
     }
   }
- 
+
   // Check for atomic transport
   if (check_for_node(root, "atomic_transport")) {
     atomic_transport = get_node_value_bool(root, "atomic_transport");
-
   }
 
   // Number of bins for logarithmic grid
