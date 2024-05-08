@@ -660,16 +660,6 @@ void scatter(Particle& p, int i_nuclide)
   const auto& micro {p.neutron_xs(i_nuclide)};
   int i_temp = micro.index_temp;
 
-  // For tallying purposes, this routine might be called directly. In that
-  // case, we need to sample a reaction via the cutoff variable
-  double cutoff = prn(p.current_seed()) * (micro.total - micro.absorption);
-  bool sampled = false;
-
-  // Calculate elastic cross section if it wasn't precalculated
-  if (micro.elastic == CACHE_INVALID) {
-    nuc->calculate_elastic_xs(p);
-  }
-
   double prob = micro.elastic - micro.thermal;
   if (prob > cutoff) {
     // =======================================================================
@@ -711,7 +701,14 @@ void scatter(Particle& p, int i_nuclide)
 
     // Perform collision physics for inelastic scattering
     const auto& rx {nuc->reactions_[i]};
-    inelastic_scatter(*nuc, *rx, p);
+    if (rx->mt_ == CHARGE_EXCHANGE) {
+       // A special kind of inelastic scattering where the outgoing particle is
+       // drawn from a fixed distribution
+       double kT = nuc->multipole_ ? p.sqrtkT() * p.sqrtkT() : nuc->kTs_[i_temp];
+       exchange_scatter(i_nuclide, kT, p);
+    } else {
+       inelastic_scatter(*nuc, *rx, p);
+    }
     p.event_mt() = rx->mt_;
   }
 
@@ -781,6 +778,40 @@ void elastic_scatter(int i_nuclide, const Reaction& rx, double kT, Particle& p)
 
   p.E() = v_n.dot(v_n);
   vel = std::sqrt(p.E());
+
+  // compute cosine of scattering angle in LAB frame by taking dot product of
+  // neutron's pre- and post-collision angle
+  p.mu() = p.u().dot(v_n) / vel;
+
+  // Set energy and direction of particle in LAB frame
+  p.u() = v_n / vel;
+
+  // Because of floating-point roundoff, it may be possible for mu_lab to be
+  // outside of the range [-1,1). In these cases, we just set mu_lab to exactly
+  // -1 or 1
+  if (std::abs(p.mu()) > 1.0)
+    p.mu() = std::copysign(1.0, p.mu());
+}
+
+void exchange_scatter(int i_nuclide, double kT, Particle& p)
+{
+  // get pointer to nuclide
+  const auto& nuc {data::nuclides[i_nuclide]};
+
+  double vel = std::sqrt(p.E());
+
+  // Neutron velocity in LAB
+  Direction v_n = vel * p.u();
+
+  // Sample velocity of target nucleus
+  Direction v_t {};
+  v_t = sample_target_velocity(*nuc, p.E(), p.u(), v_n,
+      p.neutron_xs(i_nuclide).elastic, kT, p.current_seed());
+
+  v_n = v_t
+
+  // Find speed of neutron in CM
+  vel = v_n.norm();
 
   // compute cosine of scattering angle in LAB frame by taking dot product of
   // neutron's pre- and post-collision angle

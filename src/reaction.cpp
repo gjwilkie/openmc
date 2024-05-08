@@ -289,6 +289,7 @@ std::unordered_map<int, std::string> REACTION_NAME_MAP {
   {N_AC, "(n,ac)"},
   {N_2NC, "(n,2nc)"},
   {HEATING_LOCAL, "heating-local"},
+  {CHARGE_EXCHANGE, "charge exchange"},
 };
 
 std::unordered_map<std::string, int> REACTION_TYPE_MAP;
@@ -373,6 +374,8 @@ int reaction_type(std::string name)
     return N_X3HE;
   } else if (name == "He4-production") {
     return N_XA;
+  } else if ( (name == "cx") || (name == "CX") ) {
+    return CHARGE_EXCHANGE;
   }
 
   // Assume the given string is a reaction MT number.  Make sure it's a natural
