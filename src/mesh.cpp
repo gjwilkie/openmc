@@ -29,6 +29,7 @@
 #include "openmc/message_passing.h"
 #include "openmc/openmp_interface.h"
 #include "openmc/particle_data.h"
+#include "openmc/plot.h"
 #include "openmc/random_dist.h"
 #include "openmc/search.h"
 #include "openmc/settings.h"
@@ -41,6 +42,10 @@
 #include "libmesh/mesh_modification.h"
 #include "libmesh/mesh_tools.h"
 #include "libmesh/numeric_vector.h"
+#endif
+
+#ifdef DAGMC
+#include "moab/FileOptions.hpp"
 #endif
 
 namespace openmc {
@@ -290,7 +295,6 @@ UnstructuredMesh::UnstructuredMesh(pugi::xml_node node) : Mesh(node)
   // check if a length unit multiplier was specified
   if (check_for_node(node, "length_multiplier")) {
     length_multiplier_ = std::stod(get_node_value(node, "length_multiplier"));
-    specified_length_multiplier_ = true;
   }
 
   // get the filename of the unstructured mesh to load
@@ -302,6 +306,10 @@ UnstructuredMesh::UnstructuredMesh(pugi::xml_node node) : Mesh(node)
   } else {
     fatal_error(fmt::format(
       "No filename supplied for unstructured mesh with ID: {}", id_));
+  }
+
+  if (check_for_node(node, "options")) {
+    options_ = get_node_value(node, "options");
   }
 
   // check if mesh tally data should be written with
@@ -366,8 +374,11 @@ void UnstructuredMesh::to_hdf5(hid_t group) const
   write_dataset(mesh_group, "type", mesh_type);
   write_dataset(mesh_group, "filename", filename_);
   write_dataset(mesh_group, "library", this->library());
+  if (!options_.empty()) {
+    write_attribute(mesh_group, "options", options_);
+  }
 
-  if (specified_length_multiplier_)
+  if (length_multiplier_ > 0.0)
     write_dataset(mesh_group, "length_multiplier", length_multiplier_);
 
   // write vertex coordinates
@@ -427,9 +438,6 @@ void UnstructuredMesh::to_hdf5(hid_t group) const
 void UnstructuredMesh::set_length_multiplier(double length_multiplier)
 {
   length_multiplier_ = length_multiplier;
-
-  if (length_multiplier_ != 1.0)
-    specified_length_multiplier_ = true;
 }
 
 ElementType UnstructuredMesh::element_type(int bin) const
@@ -581,7 +589,7 @@ void StructuredMesh::raytrace_mesh(
 
   // Compute the length of the entire track.
   double total_distance = (r1 - r0).norm();
-  if (total_distance == 0.0)
+  if (total_distance == 0.0 && settings::solver_type != SolverType::RANDOM_RAY)
     return;
 
   const int n = n_dimension_;
@@ -1880,6 +1888,17 @@ extern "C" int openmc_mesh_get_n_elements(int32_t index, size_t* n)
   return 0;
 }
 
+//! Get the volume of each element in the mesh
+extern "C" int openmc_mesh_get_volumes(int32_t index, double* volumes)
+{
+  if (int err = check_mesh(index))
+    return err;
+  for (int i = 0; i < model::meshes[index]->n_bins(); ++i) {
+    volumes[i] = model::meshes[index]->volume(i);
+  }
+  return 0;
+}
+
 extern "C" int openmc_mesh_material_volumes(int32_t index, int n_sample,
   int bin, int result_size, void* result, int* hits, uint64_t* seed)
 {
@@ -1896,6 +1915,63 @@ extern "C" int openmc_mesh_material_volumes(int32_t index, int n_sample,
     n_sample, bin, {result_, result_ + result_size}, seed);
   *hits = n;
   return (n == -1) ? OPENMC_E_ALLOCATE : 0;
+}
+
+extern "C" int openmc_mesh_get_plot_bins(int32_t index, Position origin,
+  Position width, int basis, int* pixels, int32_t* data)
+{
+  if (int err = check_mesh(index))
+    return err;
+  const auto& mesh = model::meshes[index].get();
+
+  int pixel_width = pixels[0];
+  int pixel_height = pixels[1];
+
+  // get pixel size
+  double in_pixel = (width[0]) / static_cast<double>(pixel_width);
+  double out_pixel = (width[1]) / static_cast<double>(pixel_height);
+
+  // setup basis indices and initial position centered on pixel
+  int in_i, out_i;
+  Position xyz = origin;
+  enum class PlotBasis { xy = 1, xz = 2, yz = 3 };
+  PlotBasis basis_enum = static_cast<PlotBasis>(basis);
+  switch (basis_enum) {
+  case PlotBasis::xy:
+    in_i = 0;
+    out_i = 1;
+    break;
+  case PlotBasis::xz:
+    in_i = 0;
+    out_i = 2;
+    break;
+  case PlotBasis::yz:
+    in_i = 1;
+    out_i = 2;
+    break;
+  default:
+    UNREACHABLE();
+  }
+
+  // set initial position
+  xyz[in_i] = origin[in_i] - width[0] / 2. + in_pixel / 2.;
+  xyz[out_i] = origin[out_i] + width[1] / 2. - out_pixel / 2.;
+
+#pragma omp parallel
+  {
+    Position r = xyz;
+
+#pragma omp for
+    for (int y = 0; y < pixel_height; y++) {
+      r[out_i] = xyz[out_i] - out_pixel * y;
+      for (int x = 0; x < pixel_width; x++) {
+        r[in_i] = xyz[in_i] + in_pixel * x;
+        data[pixel_width * y + x] = mesh->get_bin(r);
+      }
+    }
+  }
+
+  return 0;
 }
 
 //! Get the dimension of a regular mesh
@@ -2162,7 +2238,7 @@ void MOABMesh::initialize()
     fatal_error("Failed to add tetrahedra to an entity set.");
   }
 
-  if (specified_length_multiplier_) {
+  if (length_multiplier_ > 0.0) {
     // get the connectivity of all tets
     moab::Range adj;
     rval = mbi_->get_adjacencies(ehs_, 0, true, adj, moab::Interface::UNION);
@@ -2222,6 +2298,7 @@ void MOABMesh::build_kdtree(const moab::Range& all_tets)
 {
   moab::Range all_tris;
   int adj_dim = 2;
+  write_message("Getting tet adjacencies...", 7);
   moab::ErrorCode rval = mbi_->get_adjacencies(
     all_tets, adj_dim, true, all_tris, moab::Interface::UNION);
   if (rval != moab::MB_SUCCESS) {
@@ -2240,10 +2317,20 @@ void MOABMesh::build_kdtree(const moab::Range& all_tets)
   all_tets_and_tris.merge(all_tris);
 
   // create a kd-tree instance
+  write_message("Building adaptive k-d tree for tet mesh...", 7);
   kdtree_ = make_unique<moab::AdaptiveKDTree>(mbi_.get());
 
-  // build the tree
-  rval = kdtree_->build_tree(all_tets_and_tris, &kdtree_root_);
+  // Determine what options to use
+  std::ostringstream options_stream;
+  if (options_.empty()) {
+    options_stream << "MAX_DEPTH=20;PLANE_SET=2;";
+  } else {
+    options_stream << options_;
+  }
+  moab::FileOptions file_opts(options_stream.str().c_str());
+
+  // Build the k-d tree
+  rval = kdtree_->build_tree(all_tets_and_tris, &kdtree_root_, &file_opts);
   if (rval != moab::MB_SUCCESS) {
     fatal_error("Failed to construct KDTree for the "
                 "unstructured mesh file: " +
@@ -2830,7 +2917,7 @@ void LibMesh::initialize()
   // assuming that unstructured meshes used in OpenMC are 3D
   n_dimension_ = 3;
 
-  if (specified_length_multiplier_) {
+  if (length_multiplier_ > 0.0) {
     libMesh::MeshTools::Modification::scale(*m_, length_multiplier_);
   }
   // if OpenMC is managing the libMesh::MeshBase instance, prepare the mesh.
