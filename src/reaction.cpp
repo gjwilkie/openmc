@@ -374,7 +374,7 @@ int reaction_type(std::string name)
     return N_X3HE;
   } else if (name == "He4-production") {
     return N_XA;
-  } else if ( (name == "cx") || (name == "CX") ) {
+  } else if ((name == "cx") || (name == "CX")) {
     return CHARGE_EXCHANGE;
   }
 

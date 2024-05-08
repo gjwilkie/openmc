@@ -71,6 +71,10 @@ void scatter(Particle& p, int i_nuclide);
 //! Treats the elastic scattering of a neutron with a target.
 void elastic_scatter(int i_nuclide, const Reaction& rx, double kT, Particle& p);
 
+//! A special kind of inelastic scatter in which the final velocity is 
+//! drawn from the material's temperature
+void exchange_scatter(int i_nuclide, double kT, Particle& p);
+
 void sab_scatter(int i_nuclide, int i_sab, Particle& p);
 
 //! samples the target velocity. The constant cross section free gas model is

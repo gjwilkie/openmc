@@ -660,6 +660,16 @@ void scatter(Particle& p, int i_nuclide)
   const auto& micro {p.neutron_xs(i_nuclide)};
   int i_temp = micro.index_temp;
 
+  // For tallying purposes, this routine might be called directly. In that
+  // case, we need to sample a reaction via the cutoff variable
+  double cutoff = prn(p.current_seed()) * (micro.total - micro.absorption);
+  bool sampled = false;
+
+  // Calculate elastic cross section if it wasn't precalculated
+  if (micro.elastic == CACHE_INVALID) {
+    nuc->calculate_elastic_xs(p);
+  }
+
   double prob = micro.elastic - micro.thermal;
   if (prob > cutoff) {
     // =======================================================================
@@ -702,12 +712,12 @@ void scatter(Particle& p, int i_nuclide)
     // Perform collision physics for inelastic scattering
     const auto& rx {nuc->reactions_[i]};
     if (rx->mt_ == CHARGE_EXCHANGE) {
-       // A special kind of inelastic scattering where the outgoing particle is
-       // drawn from a fixed distribution
-       double kT = nuc->multipole_ ? p.sqrtkT() * p.sqrtkT() : nuc->kTs_[i_temp];
-       exchange_scatter(i_nuclide, kT, p);
+      // A special kind of inelastic scattering where the outgoing particle is
+      // drawn from a fixed distribution
+      double kT = nuc->multipole_ ? p.sqrtkT() * p.sqrtkT() : nuc->kTs_[i_temp];
+      exchange_scatter(i_nuclide, kT, p);
     } else {
-       inelastic_scatter(*nuc, *rx, p);
+      inelastic_scatter(*nuc, *rx, p);
     }
     p.event_mt() = rx->mt_;
   }
@@ -806,9 +816,9 @@ void exchange_scatter(int i_nuclide, double kT, Particle& p)
   // Sample velocity of target nucleus
   Direction v_t {};
   v_t = sample_target_velocity(*nuc, p.E(), p.u(), v_n,
-      p.neutron_xs(i_nuclide).elastic, kT, p.current_seed());
+    p.neutron_xs(i_nuclide).elastic, kT, p.current_seed());
 
-  v_n = v_t
+  v_n = v_t;
 
   // Find speed of neutron in CM
   vel = v_n.norm();
